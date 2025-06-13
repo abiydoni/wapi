@@ -51,3 +51,6 @@ dist/
 
 # VSCode settings
 .vscode/ 
+
+# Deploy Folder 
+deploy_temp/

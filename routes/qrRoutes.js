@@ -23,7 +23,7 @@ module.exports = (whatsappManager) => {
         const clientData = whatsappManager.getSessionById(sessionId);
         if (!clientData) return res.status(404).send('Session not found');
         if (clientData.isConnected) {
-          const baseUrl = req.protocol + '://' + req.get('host');
+          const baseUrl = 'https://' + req.get('host');
           return res.render('connected', { baseUrl, qrData: null, sessionId, numberId: clientData.numberId, isConnected: true, user: req.session.user });
         }
         if (!clientData.qrData) {
