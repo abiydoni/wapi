@@ -54,7 +54,6 @@ module.exports = (whatsappManager, validateSession) => {
 
   router.get("/sessions", async (req, res) => {
     try {
-      const user = req.session && req.session.user;
       let sessions = Array.from(whatsappManager.clients.entries()).map(
         ([sessionId, data]) => ({
           sessionId,
@@ -69,9 +68,6 @@ module.exports = (whatsappManager, validateSession) => {
           ownerCompany: data.ownerCompany || null,
         })
       );
-      if (!user || user.role !== "admin") {
-        sessions = sessions.filter((s) => s.owner === user.username);
-      }
       res.json({
         status: "success",
         count: sessions.length,
@@ -93,8 +89,10 @@ module.exports = (whatsappManager, validateSession) => {
     },
     async (req, res) => {
       try {
+        console.log("🔍 POST /sessions called");
+        console.log("🔍 Request body:", req.body);
+
         const { numberId } = req.body;
-        const user = req.session && req.session.user;
         if (!numberId) {
           return res.status(400).json({
             status: "error",
@@ -107,17 +105,8 @@ module.exports = (whatsappManager, validateSession) => {
             message: "Number ID must be numeric.",
           });
         }
-        if (user && user.role !== "admin") {
-          const userSession = Array.from(
-            whatsappManager.clients.entries()
-          ).find(([, data]) => data.owner === user.username);
-          if (userSession) {
-            return res.status(400).json({
-              status: "error",
-              message: "You can only add one WhatsApp number.",
-            });
-          }
-        }
+
+        console.log("🔍 NumberId validated:", numberId);
 
         if (whatsappManager.numberToSessionMap.has(numberId)) {
           const existingSessionId =
@@ -126,6 +115,7 @@ module.exports = (whatsappManager, validateSession) => {
             whatsappManager.clients.get(existingSessionId);
 
           if (existingSession) {
+            console.log("🔍 Existing session found, redirecting");
             return res.redirect(
               `/qr?sessionId=${existingSessionId}&numberId=${numberId}`
             );
@@ -134,21 +124,25 @@ module.exports = (whatsappManager, validateSession) => {
           }
         }
 
+        console.log("🔍 Generating new session");
         const sessionId = whatsappManager.generateSessionId();
-        // Get user's company from database
-        const userData = await whatsappManager.db.getUserByUsername(
-          user.username
-        );
+        console.log("🔍 SessionId generated:", sessionId);
+
+        console.log("🔍 Calling initWhatsApp");
         await whatsappManager.initWhatsApp(
           sessionId,
           numberId,
           false,
-          user ? user.username : null,
-          userData.company
+          "admin",
+          "WhatsApp API"
         );
+        console.log("🔍 initWhatsApp completed");
 
+        console.log("🔍 Redirecting to QR page");
         return res.redirect(`/qr?sessionId=${sessionId}&numberId=${numberId}`);
       } catch (error) {
+        console.log("❌ Create session error:", error);
+        console.log("❌ Error stack:", error.stack);
         whatsappManager.logger.error("Create session error:", error);
         res.status(500).json({
           status: "error",
