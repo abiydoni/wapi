@@ -11,7 +11,7 @@
   "license": "ISC",
   "dependencies": {
     "@hapi/boom": "^10.0.1",
-    "@whiskeysockets/baileys": "^6.17.16",
+    "wa-multi-session": "^3.8.3",
     "axios": "^1.6.0",
     "bcrypt": "^5.1.0",
     "ejs": "^3.1.10",
