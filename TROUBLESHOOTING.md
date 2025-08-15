@@ -45,19 +45,43 @@ app.use(
 );
 ```
 
-#### 2. **Perbaikan Middleware Logging**
+#### 2. **Perbaikan Middleware Conflict**
+
+```javascript
+// Sebelum - Ada dua middleware requireLogin yang berbeda
+// Di authRoutes.js dan qrRoutes.js
+
+// Sesudah - Menggunakan satu middleware dari authRoutes.js
+module.exports = (whatsappManager, requireLogin) => {
+  router.get('/', requireLogin, (req, res) => {
+    console.log('🔍 Rendering index page for user:', req.session.user);
+    res.render('index', { user: req.session.user });
+  });
+```
+
+#### 3. **Perbaikan Route Registration**
+
+```javascript
+// Sebelum
+app.use("/", qrRoutes(whatsappManager));
+
+// Sesudah
+app.use("/", qrRoutes(whatsappManager, requireLogin));
+```
+
+#### 4. **Perbaikan Middleware Logging**
 
 ```javascript
 function requireLogin(req, res, next) {
-  console.log("🔍 Checking session:", req.session);
-  console.log("🔍 User in session:", req.session?.user);
+  console.log("🔍 requireLogin middleware - Session:", req.session);
+  console.log("🔍 requireLogin middleware - User:", req.session?.user);
 
   if (req.session && req.session.user) {
-    console.log("✅ User authenticated, proceeding...");
+    console.log("✅ requireLogin - User authenticated, proceeding...");
     return next();
   }
 
-  console.log("❌ User not authenticated, redirecting to login");
+  console.log("❌ requireLogin - User not authenticated, redirecting to login");
   res.redirect("/login");
 }
 ```
@@ -77,6 +101,8 @@ function requireLogin(req, res, next) {
 - ✅ **Login berhasil** → Diarahkan ke dashboard
 - ✅ **Session tersimpan** → Tidak diarahkan ke login lagi
 - ✅ **Dashboard accessible** → Bisa melihat halaman utama
+- ✅ **Middleware conflict resolved** → Tidak ada lagi konflik middleware
+- ✅ **Session cookies working** → Session tersimpan dengan benar di browser
 
 ---
 

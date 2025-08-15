@@ -1,38 +1,32 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
 
-module.exports = (whatsappManager) => {
-  // Require login middleware
-  function requireLogin(req, res, next) {
-    console.log('🔍 Checking session:', req.session);
-    console.log('🔍 User in session:', req.session?.user);
-    
-    if (req.session && req.session.user) {
-      console.log('✅ User authenticated, proceeding...');
-      return next();
-    }
-    
-    console.log('❌ User not authenticated, redirecting to login');
-    res.redirect('/login');
-  }
-
-  router.get('/', requireLogin, (req, res) => {
-    res.render('index', { user: req.session.user });
+module.exports = (whatsappManager, requireLogin) => {
+  router.get("/", requireLogin, (req, res) => {
+    console.log("🔍 Rendering index page for user:", req.session.user);
+    res.render("index", { user: req.session.user });
   });
 
-  router.get('/qr', requireLogin, async (req, res) => {
+  router.get("/qr", requireLogin, async (req, res) => {
     try {
       const { sessionId, numberId } = req.query;
       if (!sessionId && !numberId) {
-        return res.status(400).send('Session ID or Number ID is required');
+        return res.status(400).send("Session ID or Number ID is required");
       }
 
       if (sessionId) {
         const clientData = whatsappManager.getSessionById(sessionId);
-        if (!clientData) return res.status(404).send('Session not found');
+        if (!clientData) return res.status(404).send("Session not found");
         if (clientData.isConnected) {
-          const baseUrl = 'https://' + req.get('host');
-          return res.render('connected', { baseUrl, qrData: null, sessionId, numberId: clientData.numberId, isConnected: true, user: req.session.user });
+          const baseUrl = "https://" + req.get("host");
+          return res.render("connected", {
+            baseUrl,
+            qrData: null,
+            sessionId,
+            numberId: clientData.numberId,
+            isConnected: true,
+            user: req.session.user,
+          });
         }
         if (!clientData.qrData) {
           return res.send(`
@@ -65,28 +59,31 @@ module.exports = (whatsappManager) => {
             </html>
           `);
         }
-        return res.render('qr', { 
-          qrData: clientData.qrData, 
+        return res.render("qr", {
+          qrData: clientData.qrData,
           sessionId,
           numberId: clientData.numberId,
           isConnected: false,
-          user: req.session.user
+          user: req.session.user,
         });
       }
 
       if (numberId) {
         if (whatsappManager.numberToSessionMap.has(numberId)) {
-          const existingSessionId = whatsappManager.numberToSessionMap.get(numberId);
-          const existingSession = whatsappManager.clients.get(existingSessionId);
-          if (existingSession) return res.redirect(`/qr?sessionId=${existingSessionId}`);
+          const existingSessionId =
+            whatsappManager.numberToSessionMap.get(numberId);
+          const existingSession =
+            whatsappManager.clients.get(existingSessionId);
+          if (existingSession)
+            return res.redirect(`/qr?sessionId=${existingSessionId}`);
         }
         const newSessionId = whatsappManager.generateSessionId();
         await whatsappManager.initWhatsApp(newSessionId, numberId);
         return res.redirect(`/qr?sessionId=${newSessionId}`);
       }
     } catch (error) {
-      whatsappManager.logger.error('QR endpoint error:', error);
-      res.status(500).send('Internal server error');
+      whatsappManager.logger.error("QR endpoint error:", error);
+      res.status(500).send("Internal server error");
     }
   });
 

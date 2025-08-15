@@ -56,13 +56,10 @@ app.use("/", authRouter);
 const requireLogin = authRouter.requireLogin;
 const requireAdmin = authRouter.requireAdmin;
 
-// PROTECT MAIN ROUTES
-app.use(["/", "/qr", "/connected"], requireLogin);
-
 const PORT = process.env.PORT || 8080;
 
 // ROUTES
-app.use("/", qrRoutes(whatsappManager));
+app.use("/", qrRoutes(whatsappManager, requireLogin));
 app.use("/", sessionRoutes(whatsappManager, validateSession(whatsappManager)));
 app.use("/", messageRoutes(whatsappManager, validateSession(whatsappManager)));
 app.use("/", groupRoutes(whatsappManager, validateSession(whatsappManager)));
