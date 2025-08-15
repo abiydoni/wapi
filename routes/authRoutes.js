@@ -5,30 +5,14 @@ const router = express.Router();
 module.exports = (whatsappManager, db) => {
   // AUTH MIDDLEWARE
   function requireLogin(req, res, next) {
-    console.log("🔍 requireLogin middleware called");
-    console.log("🔍 URL:", req.url);
-    console.log("🔍 Method:", req.method);
-    console.log("🔍 Session ID:", req.sessionID);
-    console.log("🔍 Session object:", req.session);
-    console.log("🔍 Session user:", req.session?.user);
-    console.log("🔍 Session cookie:", req.headers.cookie);
-    console.log("🔍 All headers:", Object.keys(req.headers));
+    console.log("🔍 requireLogin middleware called for:", req.url);
 
     if (req.session && req.session.user) {
-      console.log("✅ requireLogin - User authenticated, proceeding...");
-      console.log("✅ User details:", req.session.user);
+      console.log("✅ User authenticated:", req.session.user.username);
       return next();
     }
 
-    console.log(
-      "❌ requireLogin - User not authenticated, redirecting to login"
-    );
-    console.log("❌ Session exists:", !!req.session);
-    console.log("❌ User exists:", !!req.session?.user);
-    console.log(
-      "❌ Session keys:",
-      req.session ? Object.keys(req.session) : "No session"
-    );
+    console.log("❌ User not authenticated, redirecting to login");
     res.redirect("/login");
   }
 
@@ -47,7 +31,6 @@ module.exports = (whatsappManager, db) => {
   router.post("/login", async (req, res) => {
     const { username, password } = req.body;
     console.log("🔍 Login attempt for username:", username);
-    console.log("🔍 Session before login:", req.session);
 
     const user = await db.getUserByUsername(username);
     if (user && (await bcrypt.compare(password, user.passwordHash))) {
@@ -60,23 +43,9 @@ module.exports = (whatsappManager, db) => {
 
       console.log("✅ Login successful for user:", username);
       console.log("✅ Session user set:", req.session.user);
-      console.log("✅ Session ID:", req.sessionID);
 
-      // Force save session before redirect
-      req.session.save((err) => {
-        if (err) {
-          console.log("❌ Session save error:", err);
-          return res.render("login", { error: "Session error" });
-        }
-        console.log("✅ Session saved successfully");
-        console.log("✅ Session after save:", req.session);
-        console.log("✅ Redirecting to /");
-
-        // Add small delay to ensure session is saved
-        setTimeout(() => {
-          return res.redirect("/");
-        }, 100);
-      });
+      // Redirect immediately
+      return res.redirect("/");
     } else {
       console.log("❌ Login failed for username:", username);
       res.render("login", { error: "Invalid username or password" });

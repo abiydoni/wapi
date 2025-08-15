@@ -3,9 +3,7 @@ const router = express.Router();
 
 module.exports = (whatsappManager, requireLogin) => {
   router.get("/", requireLogin, (req, res) => {
-    console.log("🔍 Index route called");
-    console.log("🔍 Rendering index page for user:", req.session.user);
-    console.log("🔍 Session in index route:", req.session);
+    console.log("🔍 Rendering index page for user:", req.session.user.username);
     res.render("index", { user: req.session.user });
   });
 

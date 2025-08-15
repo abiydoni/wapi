@@ -49,17 +49,7 @@ app.use(
   })
 );
 
-// DEBUG MIDDLEWARE
-app.use((req, res, next) => {
-  console.log(`🔍 [${req.method}] ${req.url}`);
-  console.log(`🔍 Session ID: ${req.sessionID}`);
-  console.log(`🔍 Session exists: ${!!req.session}`);
-  console.log(`🔍 Session user: ${req.session?.user ? "YES" : "NO"}`);
-  if (req.session?.user) {
-    console.log(`🔍 User: ${req.session.user.username}`);
-  }
-  next();
-});
+
 
 // INITIALIZE WHATSAPP MANAGER
 const whatsappManager = new WhatsAppManager();
