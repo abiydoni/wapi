@@ -37,11 +37,13 @@ app.use(
     secret: "whatsapp-gateway-secret",
     resave: true,
     saveUninitialized: true,
+    name: "connect.sid",
     cookie: {
       maxAge: 24 * 60 * 60 * 1000,
       secure: false, // Set to true if using HTTPS
       httpOnly: true,
       sameSite: "lax",
+      path: "/",
     },
   })
 );

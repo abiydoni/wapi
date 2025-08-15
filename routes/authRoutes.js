@@ -5,17 +5,23 @@ const router = express.Router();
 module.exports = (whatsappManager, db) => {
   // AUTH MIDDLEWARE
   function requireLogin(req, res, next) {
-    console.log("🔍 requireLogin middleware - Session:", req.session);
-    console.log("🔍 requireLogin middleware - User:", req.session?.user);
+    console.log("🔍 requireLogin middleware called");
+    console.log("🔍 Session ID:", req.sessionID);
+    console.log("🔍 Session object:", req.session);
+    console.log("🔍 Session user:", req.session?.user);
+    console.log("🔍 Session cookie:", req.headers.cookie);
 
     if (req.session && req.session.user) {
       console.log("✅ requireLogin - User authenticated, proceeding...");
+      console.log("✅ User details:", req.session.user);
       return next();
     }
 
     console.log(
       "❌ requireLogin - User not authenticated, redirecting to login"
     );
+    console.log("❌ Session exists:", !!req.session);
+    console.log("❌ User exists:", !!req.session?.user);
     res.redirect("/login");
   }
 
@@ -44,10 +50,21 @@ module.exports = (whatsappManager, db) => {
       };
       console.log("✅ Login successful for user:", username);
       console.log("✅ Session user set:", req.session.user);
-      return res.redirect("/");
+
+      // Force save session before redirect
+      req.session.save((err) => {
+        if (err) {
+          console.log("❌ Session save error:", err);
+          return res.render("login", { error: "Session error" });
+        }
+        console.log("✅ Session saved successfully");
+        console.log("✅ Redirecting to /");
+        return res.redirect("/");
+      });
+    } else {
+      console.log("❌ Login failed for username:", username);
+      res.render("login", { error: "Invalid username or password" });
     }
-    console.log("❌ Login failed for username:", username);
-    res.render("login", { error: "Invalid username or password" });
   });
 
   // REGISTER ROUTES (admin only)
