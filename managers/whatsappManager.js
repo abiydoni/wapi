@@ -209,17 +209,32 @@ class WhatsAppManager {
 
       this.clients.set(sessionId, clientData);
 
-      if (numberId && !isRecovery) {
-        await this.db.saveSession(sessionId, {
-          numberId,
-          isConnected: false,
-          createdAt: new Date(),
-          lastActivity: null,
-          metadata: { isRecovery: false },
-          connectedAt: null,
-          owner: owner || null,
-          ownerCompany: ownerCompany || null,
-        });
+      // Always save session to database, regardless of recovery status
+      if (numberId) {
+        try {
+          await this.db.saveSession(sessionId, {
+            numberId,
+            isConnected: false,
+            createdAt: new Date(),
+            lastActivity: null,
+            metadata: { isRecovery: isRecovery },
+            connectedAt: null,
+            owner: owner || null,
+            ownerCompany: ownerCompany || null,
+          });
+          this.logger.info(
+            `✅ Session ${sessionId} saved to database successfully`
+          );
+        } catch (error) {
+          this.logger.error(
+            `❌ Failed to save session ${sessionId} to database:`,
+            error
+          );
+        }
+      } else {
+        this.logger.warn(
+          `⚠️ No numberId provided for session ${sessionId}, skipping database save`
+        );
       }
 
       // Start session with wa-multi-session
@@ -387,22 +402,38 @@ class WhatsAppManager {
   // ----------------------
   async updateSessionStatus(sessionId, isConnected) {
     const clientData = this.clients.get(sessionId);
-    if (!clientData) return;
+    if (!clientData) {
+      this.logger.warn(
+        `⚠️ No client data found for session ${sessionId} in updateSessionStatus`
+      );
+      return;
+    }
 
     clientData.isConnected = isConnected;
     if (isConnected && !clientData.connectedAt) {
       clientData.connectedAt = new Date();
     }
 
-    await this.db.saveSession(sessionId, {
-      numberId: clientData.numberId,
-      isConnected,
-      createdAt: clientData.createdAt,
-      lastActivity: new Date(),
-      metadata: { isRecovery: clientData.isRecovery },
-      connectedAt: clientData.connectedAt,
-      owner: clientData.owner,
-    });
+    try {
+      await this.db.saveSession(sessionId, {
+        numberId: clientData.numberId,
+        isConnected,
+        createdAt: clientData.createdAt,
+        lastActivity: new Date(),
+        metadata: { isRecovery: clientData.isRecovery },
+        connectedAt: clientData.connectedAt,
+        owner: clientData.owner,
+        ownerCompany: clientData.ownerCompany,
+      });
+      this.logger.info(
+        `✅ Session ${sessionId} status updated in database: connected=${isConnected}`
+      );
+    } catch (error) {
+      this.logger.error(
+        `❌ Failed to update session ${sessionId} status in database:`,
+        error
+      );
+    }
   }
 
   async recoverSessions() {
@@ -410,10 +441,24 @@ class WhatsAppManager {
       const sessions = await this.db.getAllSessions();
       this.logger.info(`Found ${sessions.length} sessions to recover`);
 
+      if (sessions.length === 0) {
+        this.logger.info(
+          "No sessions found in database, checking wa-multi-session storage..."
+        );
+        // Check if there are any sessions in wa-multi-session storage that aren't in database
+        const whatsapp = require("wa-multi-session");
+        const allSessions = whatsapp.getAllSessions
+          ? whatsapp.getAllSessions()
+          : [];
+        this.logger.info(
+          `Found ${allSessions.length} sessions in wa-multi-session storage`
+        );
+      }
+
       for (const session of sessions) {
         try {
           this.logger.info(
-            `Attempting to recover session: ${session.sessionId}`
+            `Attempting to recover session: ${session.sessionId} (${session.numberId})`
           );
 
           // Check if session already exists in memory
@@ -455,6 +500,18 @@ class WhatsAppManager {
             if (session.numberId) {
               this.numberToSessionMap.set(session.numberId, session.sessionId);
             }
+
+            // Update session in database to mark as connected
+            await this.db.saveSession(session.sessionId, {
+              numberId: session.numberId,
+              isConnected: true,
+              createdAt: session.createdAt || new Date(),
+              lastActivity: new Date(),
+              metadata: { isRecovery: true },
+              connectedAt: session.connectedAt || new Date(),
+              owner: session.owner || null,
+              ownerCompany: session.ownerCompany || null,
+            });
 
             this.logger.info(
               `✅ Session ${session.sessionId} recovered from wa-multi-session storage`

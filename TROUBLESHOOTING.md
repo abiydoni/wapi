@@ -139,23 +139,49 @@ npm start
 ### 2. **Buat Session Baru**
 
 1. Buka `http://localhost:8080`
-2. Login
-3. Klik "Add WhatsApp Number"
-4. Scan QR code
+2. Login dengan username: `admin`, password: `admin`
+3. Masukkan nomor WhatsApp (contoh: `089510101008`)
+4. Klik "Add Number"
+5. Scan QR code sampai berhasil
 
-### 3. **Cek Status Session**
+### 3. **Monitor Logs Saat Membuat Session**
 
-- Setelah scan QR berhasil, cek apakah status "Connected"
-- Coba refresh halaman, seharusnya tidak masuk login lagi
-- Coba kirim pesan, seharusnya berhasil
-
-### 4. **Cek Logs**
-
-Monitor logs untuk melihat:
+Cari log messages ini:
 
 ```
+✅ Session [session-id] saved to database successfully
+Session '[session-id]' connected
 ✅ Session [session-id] fully connected and saved
-✅ Session [session-id] recovered successfully
+✅ Session [session-id] status updated in database: connected=true
+```
+
+### 4. **Cek Database Setelah Session Dibuat**
+
+```bash
+node check_sessions.js
+```
+
+Seharusnya menampilkan:
+
+```
+📊 Sessions in database: 1
+  - [session-id] ([number-id]) - Connected: Yes
+```
+
+### 5. **Test Restart Aplikasi**
+
+1. Stop aplikasi (Ctrl+C)
+2. Start lagi: `npm start`
+3. Login dan cek apakah session masih ada dan connected
+
+### 6. **Cek Logs Saat Recovery**
+
+Cari log messages ini:
+
+```
+Found 1 sessions to recover
+Attempting to recover session: [session-id] ([number-id])
+✅ Session [session-id] recovered from wa-multi-session storage
 ```
 
 ## Jika Masih Bermasalah:
