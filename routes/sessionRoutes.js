@@ -174,5 +174,27 @@ module.exports = (whatsappManager, validateSession) => {
     }
   });
 
+  // Force update connection status
+  router.post("/sessions/:sessionId/status", async (req, res) => {
+    const { sessionId } = req.params;
+    const { isConnected } = req.body;
+
+    try {
+      await whatsappManager.forceUpdateConnectionStatus(sessionId, isConnected);
+      res.json({
+        status: "success",
+        message: `Session ${sessionId} status updated to ${
+          isConnected ? "connected" : "disconnected"
+        }`,
+      });
+    } catch (error) {
+      whatsappManager.logger.error("Update session status error:", error);
+      res.status(500).json({
+        status: "error",
+        message: error.message,
+      });
+    }
+  });
+
   return router;
 };

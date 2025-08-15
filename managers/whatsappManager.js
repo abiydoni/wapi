@@ -101,6 +101,43 @@ class WhatsAppManager {
       }
     });
 
+    // Add connection state change handler
+    whatsapp.onConnectionStateChanged(async (session, state) => {
+      this.logger.info(
+        `Connection state changed for session ${session}: ${state}`
+      );
+      const clientData = this.clients.get(session);
+      if (clientData) {
+        if (state === "connected") {
+          clientData.isConnected = true;
+          clientData.qrData = null;
+          clientData.connectedAt = new Date();
+          await this.updateSessionStatus(session, true);
+
+          // Update numberToSessionMap
+          if (clientData.numberId) {
+            this.numberToSessionMap.set(clientData.numberId, session);
+          }
+
+          this.logger.info(
+            `✅ Session ${session} connection state changed to connected`
+          );
+        } else if (state === "disconnected") {
+          clientData.isConnected = false;
+          await this.updateSessionStatus(session, false);
+
+          // Remove from numberToSessionMap
+          if (clientData.numberId) {
+            this.numberToSessionMap.delete(clientData.numberId);
+          }
+
+          this.logger.info(
+            `❌ Session ${session} connection state changed to disconnected`
+          );
+        }
+      }
+    });
+
     whatsapp.onConnecting(async (session) => {
       this.logger.info(`Session '${session}' connecting`);
       const clientData = this.clients.get(session);
@@ -666,29 +703,9 @@ class WhatsAppManager {
       return null;
     }
 
-    // Check if session is actually connected in wa-multi-session
-    const whatsapp = require("wa-multi-session");
-    const sessionExists = whatsapp.getSession(sessionId);
-
-    // Determine actual connection status
-    let isConnected = false;
-    if (sessionExists) {
-      // If session exists in wa-multi-session, it's likely connected
-      isConnected = true;
-      // Update client data if it was marked as disconnected
-      if (!clientData.isConnected) {
-        clientData.isConnected = true;
-        clientData.connectedAt = clientData.connectedAt || new Date();
-        this.logger.info(`Session ${sessionId} status updated to connected`);
-      }
-    } else {
-      // If session doesn't exist in wa-multi-session, it's disconnected
-      isConnected = false;
-      if (clientData.isConnected) {
-        clientData.isConnected = false;
-        this.logger.info(`Session ${sessionId} status updated to disconnected`);
-      }
-    }
+    // Use the stored connection status from clientData
+    // This is more reliable as it's updated by event handlers
+    const isConnected = clientData.isConnected;
 
     const status = {
       isConnected: isConnected,
@@ -698,7 +715,7 @@ class WhatsAppManager {
       reconnectAttempts: clientData.reconnectAttempts,
       maxReconnectAttempts: clientData.maxReconnectAttempts,
       connectedAt: clientData.connectedAt || null,
-      sessionExists: !!sessionExists,
+      sessionExists: true, // Assume session exists if we have clientData
     };
 
     this.logger.debug(`Session status for ${sessionId}:`, status);
@@ -712,6 +729,21 @@ class WhatsAppManager {
     this.logger.info(
       `Session ${sessionId} deleted from db, auth files, and memory.`
     );
+  }
+
+  // Force update connection status for a session
+  async forceUpdateConnectionStatus(sessionId, isConnected) {
+    const clientData = this.clients.get(sessionId);
+    if (clientData) {
+      clientData.isConnected = isConnected;
+      if (isConnected && !clientData.connectedAt) {
+        clientData.connectedAt = new Date();
+      }
+      await this.updateSessionStatus(sessionId, isConnected);
+      this.logger.info(
+        `Force updated session ${sessionId} status to: ${isConnected}`
+      );
+    }
   }
 
   // ----------------------
