@@ -238,14 +238,15 @@ class WhatsAppManager {
       }
 
       // Start session with wa-multi-session
+      const self = this; // Store reference to this
       const qr = await new Promise(async (resolve) => {
         await whatsapp.startSession(sessionId, {
           onConnected() {
-            this.logger.info(`Session ${sessionId} connected in initWhatsApp`);
+            self.logger.info(`Session ${sessionId} connected in initWhatsApp`);
             resolve(null);
           },
           onQRUpdated(qr) {
-            this.logger.info(`QR Code updated for session ${sessionId}`);
+            self.logger.info(`QR Code updated for session ${sessionId}`);
             resolve(qr);
           },
         });

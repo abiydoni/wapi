@@ -213,9 +213,11 @@
     // Toast notification function
     function showTWToast({ type, message }) {
       const toast = document.createElement('div');
-      toast.className = `fixed top-4 right-4 z-50 px-6 py-3 rounded-lg text-white font-semibold ${
-        type === 'success' ? 'bg-green-500' : 'bg-red-500'
-      }`;
+      let bgColor = 'bg-red-500';
+      if (type === 'success') bgColor = 'bg-green-500';
+      else if (type === 'info') bgColor = 'bg-blue-500';
+      
+      toast.className = `fixed top-4 right-4 z-50 px-6 py-3 rounded-lg text-white font-semibold ${bgColor}`;
       toast.textContent = message;
       document.body.appendChild(toast);
       
@@ -228,25 +230,47 @@
     document.querySelector('form[action="/sessions"]').addEventListener('submit', async function(e) {
       e.preventDefault();
       const numberId = this.numberId.value;
+      const submitBtn = this.querySelector('button[type="submit"]');
+      
       if (!/^\d+$/.test(numberId)) {
         showTWToast({ type: 'error', message: 'Number ID must be numeric.' });
         return;
       }
-      const res = await fetch('/sessions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ numberId })
-      });
+      
+      // Show loading state
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Adding...';
+      showTWToast({ type: 'info', message: 'Adding WhatsApp number...' });
+      
+      try {
+        const res = await fetch('/sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ numberId })
+        });
 
-      if (res.redirected) {
-        // Jika sukses, redirect ke QR
-        window.location.href = res.url;
-        return;
-      }
+        if (res.redirected) {
+          // Jika sukses, redirect ke QR
+          showTWToast({ type: 'success', message: 'Number added successfully! Redirecting to QR...' });
+          setTimeout(() => {
+            window.location.href = res.url;
+          }, 1000);
+          return;
+        }
 
-      const data = await res.json();
-      if (data.status === 'error') {
-        showTWToast({ type: 'error', message: data.message });
+        const data = await res.json();
+        if (data.status === 'error') {
+          showTWToast({ type: 'error', message: data.message });
+        } else {
+          showTWToast({ type: 'success', message: 'Number added successfully!' });
+          loadSessions(); // Refresh sessions list
+        }
+      } catch (error) {
+        showTWToast({ type: 'error', message: 'Failed to add number. Please try again.' });
+      } finally {
+        // Reset button state
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Add Number';
       }
     });
   </script>
