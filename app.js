@@ -38,6 +38,7 @@ app.use(
     resave: true,
     saveUninitialized: true,
     name: "connect.sid",
+    store: new session.MemoryStore(),
     cookie: {
       maxAge: 24 * 60 * 60 * 1000,
       secure: false, // Set to true if using HTTPS
@@ -47,6 +48,18 @@ app.use(
     },
   })
 );
+
+// DEBUG MIDDLEWARE
+app.use((req, res, next) => {
+  console.log(`🔍 [${req.method}] ${req.url}`);
+  console.log(`🔍 Session ID: ${req.sessionID}`);
+  console.log(`🔍 Session exists: ${!!req.session}`);
+  console.log(`🔍 Session user: ${req.session?.user ? "YES" : "NO"}`);
+  if (req.session?.user) {
+    console.log(`🔍 User: ${req.session.user.username}`);
+  }
+  next();
+});
 
 // INITIALIZE WHATSAPP MANAGER
 const whatsappManager = new WhatsAppManager();

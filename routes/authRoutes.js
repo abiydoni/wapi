@@ -6,10 +6,13 @@ module.exports = (whatsappManager, db) => {
   // AUTH MIDDLEWARE
   function requireLogin(req, res, next) {
     console.log("🔍 requireLogin middleware called");
+    console.log("🔍 URL:", req.url);
+    console.log("🔍 Method:", req.method);
     console.log("🔍 Session ID:", req.sessionID);
     console.log("🔍 Session object:", req.session);
     console.log("🔍 Session user:", req.session?.user);
     console.log("🔍 Session cookie:", req.headers.cookie);
+    console.log("🔍 All headers:", Object.keys(req.headers));
 
     if (req.session && req.session.user) {
       console.log("✅ requireLogin - User authenticated, proceeding...");
@@ -22,6 +25,10 @@ module.exports = (whatsappManager, db) => {
     );
     console.log("❌ Session exists:", !!req.session);
     console.log("❌ User exists:", !!req.session?.user);
+    console.log(
+      "❌ Session keys:",
+      req.session ? Object.keys(req.session) : "No session"
+    );
     res.redirect("/login");
   }
 
@@ -40,16 +47,20 @@ module.exports = (whatsappManager, db) => {
   router.post("/login", async (req, res) => {
     const { username, password } = req.body;
     console.log("🔍 Login attempt for username:", username);
+    console.log("🔍 Session before login:", req.session);
 
     const user = await db.getUserByUsername(username);
     if (user && (await bcrypt.compare(password, user.passwordHash))) {
+      // Set session data
       req.session.user = {
         username,
         role: user.role,
         company: user.company,
       };
+
       console.log("✅ Login successful for user:", username);
       console.log("✅ Session user set:", req.session.user);
+      console.log("✅ Session ID:", req.sessionID);
 
       // Force save session before redirect
       req.session.save((err) => {
@@ -58,8 +69,13 @@ module.exports = (whatsappManager, db) => {
           return res.render("login", { error: "Session error" });
         }
         console.log("✅ Session saved successfully");
+        console.log("✅ Session after save:", req.session);
         console.log("✅ Redirecting to /");
-        return res.redirect("/");
+
+        // Add small delay to ensure session is saved
+        setTimeout(() => {
+          return res.redirect("/");
+        }, 100);
       });
     } else {
       console.log("❌ Login failed for username:", username);
