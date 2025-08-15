@@ -47,6 +47,9 @@ class WhatsAppManager {
         }
 
         this.logger.info(`✅ Session ${session} fully connected and saved`);
+        
+        // Send real-time update to connected clients
+        this.sendStatusUpdateToClients(session);
       } else {
         // If no client data found, try to recover from database
         this.logger.warn(
@@ -77,6 +80,9 @@ class WhatsAppManager {
 
             await this.updateSessionStatus(session, true);
             this.logger.info(`✅ Session ${session} recovered and connected`);
+            
+            // Send real-time update to connected clients
+            this.sendStatusUpdateToClients(session);
           }
         } catch (error) {
           this.logger.error(`Failed to recover session ${session}:`, error);
@@ -92,6 +98,9 @@ class WhatsAppManager {
         try {
           clientData.qrData = await qrcode.toDataURL(qr);
           this.logger.info(`QR Code generated for session ${session}`);
+
+          // Update database with QR status
+          await this.updateSessionStatus(session, false);
         } catch (error) {
           this.logger.error(
             `Failed to generate QR code for session ${session}:`,
@@ -121,6 +130,9 @@ class WhatsAppManager {
         if (clientData.numberId) {
           this.numberToSessionMap.delete(clientData.numberId);
         }
+        
+        // Send real-time update to connected clients
+        this.sendStatusUpdateToClients(session);
       }
     });
 
@@ -666,9 +678,29 @@ class WhatsAppManager {
       return null;
     }
 
-    // Use the stored connection status from clientData
-    // This is more reliable as it's updated by event handlers
-    const isConnected = clientData.isConnected;
+    // Check if session is actually connected in wa-multi-session
+    const whatsapp = require("wa-multi-session");
+    const sessionExists = whatsapp.getSession(sessionId);
+
+    // Determine actual connection status
+    let isConnected = false;
+    if (sessionExists) {
+      // If session exists in wa-multi-session, it's likely connected
+      isConnected = true;
+      // Update client data if it was marked as disconnected
+      if (!clientData.isConnected) {
+        clientData.isConnected = true;
+        clientData.connectedAt = clientData.connectedAt || new Date();
+        this.logger.info(`Session ${sessionId} status updated to connected`);
+      }
+    } else {
+      // If session doesn't exist in wa-multi-session, it's disconnected
+      isConnected = false;
+      if (clientData.isConnected) {
+        clientData.isConnected = false;
+        this.logger.info(`Session ${sessionId} status updated to disconnected`);
+      }
+    }
 
     const status = {
       isConnected: isConnected,
@@ -678,7 +710,7 @@ class WhatsAppManager {
       reconnectAttempts: clientData.reconnectAttempts,
       maxReconnectAttempts: clientData.maxReconnectAttempts,
       connectedAt: clientData.connectedAt || null,
-      sessionExists: true, // Assume session exists if we have clientData
+      sessionExists: !!sessionExists,
     };
 
     this.logger.debug(`Session status for ${sessionId}:`, status);
@@ -692,6 +724,41 @@ class WhatsAppManager {
     this.logger.info(
       `Session ${sessionId} deleted from db, auth files, and memory.`
     );
+  }
+
+  // Force update connection status for a session
+  async forceUpdateConnectionStatus(sessionId, isConnected) {
+    const clientData = this.clients.get(sessionId);
+    if (clientData) {
+      clientData.isConnected = isConnected;
+      if (isConnected && !clientData.connectedAt) {
+        clientData.connectedAt = new Date();
+      }
+      await this.updateSessionStatus(sessionId, isConnected);
+      this.logger.info(
+        `Force updated session ${sessionId} status to: ${isConnected}`
+      );
+      
+      // Send real-time update to connected clients
+      this.sendStatusUpdateToClients(sessionId);
+    }
+  }
+
+  // Send status update to connected SSE clients
+  sendStatusUpdateToClients(sessionId) {
+    const clientData = this.clients.get(sessionId);
+    if (clientData && clientData.clients) {
+      const status = this.getSessionStatus(sessionId);
+      clientData.clients.forEach((client) => {
+        if (!client.res.writableEnded) {
+          try {
+            client.res.write(`data: ${JSON.stringify(status)}\n\n`);
+          } catch (error) {
+            this.logger.error(`Failed to send update to client ${client.id}:`, error);
+          }
+        }
+      });
+    }
   }
 
   // Force update connection status for a session
