@@ -48,9 +48,39 @@ class WhatsAppManager {
 
         this.logger.info(`✅ Session ${session} fully connected and saved`);
       } else {
+        // If no client data found, try to recover from database
         this.logger.warn(
-          `No client data found for connected session ${session}`
+          `No client data found for connected session ${session}, attempting recovery`
         );
+        try {
+          const sessionData = await this.db.getSession(session);
+          if (sessionData) {
+            const recoveredClientData = {
+              sessionId: session,
+              qrData: null,
+              isConnected: true,
+              numberId: sessionData.numberId,
+              isRecovery: false,
+              reconnectAttempts: 0,
+              maxReconnectAttempts: 5,
+              createdAt: sessionData.createdAt || new Date(),
+              lastActivity: new Date(),
+              connectedAt: new Date(),
+              owner: sessionData.owner || null,
+              ownerCompany: sessionData.ownerCompany || null,
+            };
+
+            this.clients.set(session, recoveredClientData);
+            if (sessionData.numberId) {
+              this.numberToSessionMap.set(sessionData.numberId, session);
+            }
+
+            await this.updateSessionStatus(session, true);
+            this.logger.info(`✅ Session ${session} recovered and connected`);
+          }
+        } catch (error) {
+          this.logger.error(`Failed to recover session ${session}:`, error);
+        }
       }
     });
 
@@ -394,22 +424,60 @@ class WhatsAppManager {
             continue;
           }
 
-          await this.initWhatsApp(
-            session.sessionId,
-            session.numberId,
-            true,
-            session.owner || null,
-            session.ownerCompany || null
-          );
+          // Check if session exists in wa-multi-session storage
+          const whatsapp = require("wa-multi-session");
+          const existingSession = whatsapp.getSession(session.sessionId);
 
-          // Update numberToSessionMap
-          if (session.numberId) {
-            this.numberToSessionMap.set(session.numberId, session.sessionId);
+          if (existingSession) {
+            this.logger.info(
+              `Session ${session.sessionId} exists in wa-multi-session, creating client data`
+            );
+
+            // Create client data for existing session
+            const clientData = {
+              sessionId: session.sessionId,
+              qrData: null,
+              isConnected: true, // Assume connected if session exists
+              numberId: session.numberId,
+              isRecovery: true,
+              reconnectAttempts: 0,
+              maxReconnectAttempts: 5,
+              createdAt: session.createdAt || new Date(),
+              lastActivity: new Date(),
+              connectedAt: session.connectedAt || new Date(),
+              owner: session.owner || null,
+              ownerCompany: session.ownerCompany || null,
+            };
+
+            this.clients.set(session.sessionId, clientData);
+
+            // Update numberToSessionMap
+            if (session.numberId) {
+              this.numberToSessionMap.set(session.numberId, session.sessionId);
+            }
+
+            this.logger.info(
+              `✅ Session ${session.sessionId} recovered from wa-multi-session storage`
+            );
+          } else {
+            // Try to initialize new session
+            await this.initWhatsApp(
+              session.sessionId,
+              session.numberId,
+              true,
+              session.owner || null,
+              session.ownerCompany || null
+            );
+
+            // Update numberToSessionMap
+            if (session.numberId) {
+              this.numberToSessionMap.set(session.numberId, session.sessionId);
+            }
+
+            this.logger.info(
+              `✅ Session ${session.sessionId} initialized successfully`
+            );
           }
-
-          this.logger.info(
-            `✅ Session ${session.sessionId} recovered successfully`
-          );
         } catch (error) {
           this.logger.error(
             `Error recovering session ${session.sessionId}:`,
@@ -503,8 +571,28 @@ class WhatsAppManager {
     const whatsapp = require("wa-multi-session");
     const sessionExists = whatsapp.getSession(sessionId);
 
+    // Determine actual connection status
+    let isConnected = false;
+    if (sessionExists) {
+      // If session exists in wa-multi-session, it's likely connected
+      isConnected = true;
+      // Update client data if it was marked as disconnected
+      if (!clientData.isConnected) {
+        clientData.isConnected = true;
+        clientData.connectedAt = clientData.connectedAt || new Date();
+        this.logger.info(`Session ${sessionId} status updated to connected`);
+      }
+    } else {
+      // If session doesn't exist in wa-multi-session, it's disconnected
+      isConnected = false;
+      if (clientData.isConnected) {
+        clientData.isConnected = false;
+        this.logger.info(`Session ${sessionId} status updated to disconnected`);
+      }
+    }
+
     const status = {
-      isConnected: clientData.isConnected && !!sessionExists,
+      isConnected: isConnected,
       qrReady: !!clientData.qrData,
       numberId: clientData.numberId,
       lastActivity: clientData.lastActivity,

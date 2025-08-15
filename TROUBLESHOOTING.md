@@ -1,6 +1,20 @@
 # Troubleshooting Session Management
 
-## Masalah: Scan QR Berhasil Tapi Masuk Login Lagi
+## Masalah: Session Hilang Setelah Restart / Status Disconnected
+
+### Gejala:
+
+1. Setelah scan QR berhasil, session tersimpan
+2. Setelah restart aplikasi, muncul status "Disconnected"
+3. Session hilang setelah beberapa detik
+4. Muncul halaman "No active sessions"
+
+### Penyebab:
+
+1. Session tidak tersimpan dengan benar di wa-multi-session storage
+2. Session recovery tidak bekerja dengan baik
+3. Status tracking tidak akurat
+4. Event handler tidak memperbarui status dengan benar
 
 ### Penyebab:
 
@@ -10,7 +24,27 @@
 
 ### Solusi yang Sudah Diterapkan:
 
-#### 1. **Perbaikan Event Handler**
+#### 1. **Perbaikan Session Recovery**
+
+```javascript
+// Menambahkan pengecekan session di wa-multi-session storage
+const existingSession = whatsapp.getSession(session.sessionId);
+
+if (existingSession) {
+  // Session ada di storage, buat client data
+  const clientData = {
+    sessionId: session.sessionId,
+    isConnected: true, // Assume connected if session exists
+    // ... other properties
+  };
+  this.clients.set(session.sessionId, clientData);
+} else {
+  // Session tidak ada, initialize baru
+  await this.initWhatsApp(session.sessionId, ...);
+}
+```
+
+#### 2. **Perbaikan Event Handler**
 
 ```javascript
 // Sebelum
@@ -44,6 +78,46 @@ if (session.numberId) {
 ```
 
 #### 3. **Perbaikan Status Checking**
+
+```javascript
+// Menambahkan pengecekan session di wa-multi-session
+const sessionExists = whatsapp.getSession(sessionId);
+
+// Determine actual connection status
+let isConnected = false;
+if (sessionExists) {
+  isConnected = true;
+  // Update client data if it was marked as disconnected
+  if (!clientData.isConnected) {
+    clientData.isConnected = true;
+    clientData.connectedAt = clientData.connectedAt || new Date();
+  }
+} else {
+  isConnected = false;
+  if (clientData.isConnected) {
+    clientData.isConnected = false;
+  }
+}
+```
+
+#### 4. **Auto Recovery untuk Session yang Hilang**
+
+```javascript
+// Jika tidak ada client data saat session connected
+if (!clientData) {
+  // Try to recover from database
+  const sessionData = await this.db.getSession(session);
+  if (sessionData) {
+    const recoveredClientData = {
+      sessionId: session,
+      isConnected: true,
+      numberId: sessionData.numberId,
+      // ... other properties
+    };
+    this.clients.set(session, recoveredClientData);
+  }
+}
+```
 
 ```javascript
 // Menambahkan pengecekan session di wa-multi-session
@@ -117,7 +191,9 @@ fetch("/sessions")
 1. ✅ **Scan QR berhasil** → Status "Connected"
 2. ✅ **Refresh halaman** → Tetap di dashboard, tidak login lagi
 3. ✅ **Kirim pesan** → Berhasil, tidak ada error "WhatsApp belum terhubung"
-4. ✅ **Restart aplikasi** → Session otomatis recovery
+4. ✅ **Restart aplikasi** → Session otomatis recovery dan tetap connected
+5. ✅ **Status tracking** → Akurat sesuai dengan session di wa-multi-session
+6. ✅ **Session persistence** → Session tidak hilang setelah restart
 
 ## Debug Commands:
 
@@ -146,8 +222,10 @@ curl -X POST http://localhost:8080/send-message \
 
 ```
 ✅ Session [session-id] fully connected and saved
-✅ Session [session-id] recovered successfully
+✅ Session [session-id] recovered from wa-multi-session storage
+✅ Session [session-id] recovered and connected
 Session '[session-id]' connected
+Session [session-id] status updated to connected
 ```
 
 Jika masih ada masalah, cek logs untuk error messages dan pastikan semua dependencies terinstall dengan benar.
