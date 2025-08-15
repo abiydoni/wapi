@@ -35,9 +35,14 @@ app.engine("html", require("ejs").renderFile);
 app.use(
   session({
     secret: "whatsapp-gateway-secret",
-    resave: false,
-    saveUninitialized: false,
-    cookie: { maxAge: 24 * 60 * 60 * 1000 },
+    resave: true,
+    saveUninitialized: true,
+    cookie: {
+      maxAge: 24 * 60 * 60 * 1000,
+      secure: false, // Set to true if using HTTPS
+      httpOnly: true,
+      sameSite: "lax",
+    },
   })
 );
 

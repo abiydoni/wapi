@@ -4,7 +4,15 @@ const router = express.Router();
 module.exports = (whatsappManager) => {
   // Require login middleware
   function requireLogin(req, res, next) {
-    if (req.session && req.session.user) return next();
+    console.log('🔍 Checking session:', req.session);
+    console.log('🔍 User in session:', req.session?.user);
+    
+    if (req.session && req.session.user) {
+      console.log('✅ User authenticated, proceeding...');
+      return next();
+    }
+    
+    console.log('❌ User not authenticated, redirecting to login');
     res.redirect('/login');
   }
 

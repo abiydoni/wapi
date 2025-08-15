@@ -1,6 +1,86 @@
-# Troubleshooting Session Management
+# Troubleshooting WhatsApp API
 
-## Masalah: Session Hilang Setelah Restart / Status Disconnected
+## Masalah 1: Login Tidak Bisa Masuk ke Halaman Selanjutnya
+
+### Gejala:
+
+1. Login berhasil (username: admin, password: admin)
+2. Setelah login, diarahkan ke halaman login lagi
+3. Tidak bisa masuk ke dashboard utama
+
+### Penyebab:
+
+1. Session configuration tidak optimal
+2. Middleware requireLogin tidak bekerja dengan benar
+3. Session tidak tersimpan dengan benar
+
+### Solusi yang Diterapkan:
+
+#### 1. **Perbaikan Session Configuration**
+
+```javascript
+// Sebelum
+app.use(
+  session({
+    secret: "whatsapp-gateway-secret",
+    resave: false,
+    saveUninitialized: false,
+    cookie: { maxAge: 24 * 60 * 60 * 1000 },
+  })
+);
+
+// Sesudah
+app.use(
+  session({
+    secret: "whatsapp-gateway-secret",
+    resave: true,
+    saveUninitialized: true,
+    cookie: {
+      maxAge: 24 * 60 * 60 * 1000,
+      secure: false,
+      httpOnly: true,
+      sameSite: "lax",
+    },
+  })
+);
+```
+
+#### 2. **Perbaikan Middleware Logging**
+
+```javascript
+function requireLogin(req, res, next) {
+  console.log("🔍 Checking session:", req.session);
+  console.log("🔍 User in session:", req.session?.user);
+
+  if (req.session && req.session.user) {
+    console.log("✅ User authenticated, proceeding...");
+    return next();
+  }
+
+  console.log("❌ User not authenticated, redirecting to login");
+  res.redirect("/login");
+}
+```
+
+### Cara Testing Login:
+
+1. **Restart aplikasi**: `npm start`
+2. **Buka browser**: `http://localhost:8080`
+3. **Login dengan**: username `admin`, password `admin`
+4. **Monitor console logs** untuk melihat:
+   ```
+   ✅ User authenticated, proceeding...
+   ```
+
+### Expected Behavior Setelah Perbaikan:
+
+- ✅ **Login berhasil** → Diarahkan ke dashboard
+- ✅ **Session tersimpan** → Tidak diarahkan ke login lagi
+- ✅ **Dashboard accessible** → Bisa melihat halaman utama
+
+---
+
+## Masalah 2: Session Hilang Setelah Restart / Status Disconnected
 
 ### Gejala:
 
