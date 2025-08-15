@@ -49,22 +49,14 @@ app.use(
   })
 );
 
-
-
 // INITIALIZE WHATSAPP MANAGER
 const whatsappManager = new WhatsAppManager();
 const db = whatsappManager.db;
 
-// AUTH ROUTES
-const authRouter = authRoutes(whatsappManager, db);
-app.use("/", authRouter);
-const requireLogin = authRouter.requireLogin;
-const requireAdmin = authRouter.requireAdmin;
-
 const PORT = process.env.PORT || 8080;
 
-// ROUTES
-app.use("/", qrRoutes(whatsappManager, requireLogin));
+// ROUTES - Tanpa login sementara
+app.use("/", qrRoutes(whatsappManager));
 app.use("/", sessionRoutes(whatsappManager, validateSession(whatsappManager)));
 app.use("/", messageRoutes(whatsappManager, validateSession(whatsappManager)));
 app.use("/", groupRoutes(whatsappManager, validateSession(whatsappManager)));

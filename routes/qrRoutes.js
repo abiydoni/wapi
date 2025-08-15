@@ -1,13 +1,20 @@
 const express = require("express");
 const router = express.Router();
 
-module.exports = (whatsappManager, requireLogin) => {
-  router.get("/", requireLogin, (req, res) => {
-    console.log("🔍 Rendering index page for user:", req.session.user.username);
-    res.render("index", { user: req.session.user });
+module.exports = (whatsappManager) => {
+  router.get("/", (req, res) => {
+    console.log("🔍 Rendering index page");
+    res.render("index", {
+      user: { username: "admin", role: "admin", company: "WhatsApp API" },
+    });
   });
 
-  router.get("/qr", requireLogin, async (req, res) => {
+  router.get("/login", (req, res) => {
+    // Langsung redirect ke dashboard tanpa login
+    res.redirect("/");
+  });
+
+  router.get("/qr", async (req, res) => {
     try {
       const { sessionId, numberId } = req.query;
       if (!sessionId && !numberId) {
@@ -25,7 +32,7 @@ module.exports = (whatsappManager, requireLogin) => {
             sessionId,
             numberId: clientData.numberId,
             isConnected: true,
-            user: req.session.user,
+            user: { username: "admin", role: "admin", company: "WhatsApp API" },
           });
         }
         if (!clientData.qrData) {
@@ -64,7 +71,7 @@ module.exports = (whatsappManager, requireLogin) => {
           sessionId,
           numberId: clientData.numberId,
           isConnected: false,
-          user: req.session.user,
+          user: { username: "admin", role: "admin", company: "WhatsApp API" },
         });
       }
 
