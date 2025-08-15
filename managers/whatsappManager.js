@@ -32,32 +32,48 @@ class WhatsAppManager {
   // WhatsApp Event Setup
   // ----------------------
   setupWhatsAppEvents() {
-    whatsapp.onConnected((session) => {
+    whatsapp.onConnected(async (session) => {
       this.logger.info(`Session '${session}' connected`);
       const clientData = this.clients.get(session);
       if (clientData) {
         clientData.isConnected = true;
         clientData.qrData = null;
         clientData.connectedAt = new Date();
-        this.updateSessionStatus(session, true);
+        await this.updateSessionStatus(session, true);
+
+        // Update numberToSessionMap
+        if (clientData.numberId) {
+          this.numberToSessionMap.set(clientData.numberId, session);
+        }
+
+        this.logger.info(`✅ Session ${session} fully connected and saved`);
+      } else {
+        this.logger.warn(
+          `No client data found for connected session ${session}`
+        );
       }
     });
 
-    whatsapp.onConnecting((session) => {
+    whatsapp.onConnecting(async (session) => {
       this.logger.info(`Session '${session}' connecting`);
       const clientData = this.clients.get(session);
       if (clientData) {
         clientData.isConnected = false;
-        this.updateSessionStatus(session, false);
+        await this.updateSessionStatus(session, false);
       }
     });
 
-    whatsapp.onDisconnected((session) => {
+    whatsapp.onDisconnected(async (session) => {
       this.logger.info(`Session '${session}' disconnected`);
       const clientData = this.clients.get(session);
       if (clientData) {
         clientData.isConnected = false;
-        this.updateSessionStatus(session, false);
+        await this.updateSessionStatus(session, false);
+
+        // Remove from numberToSessionMap
+        if (clientData.numberId) {
+          this.numberToSessionMap.delete(clientData.numberId);
+        }
       }
     });
 
@@ -180,9 +196,11 @@ class WhatsAppManager {
       const qr = await new Promise(async (resolve) => {
         await whatsapp.startSession(sessionId, {
           onConnected() {
+            this.logger.info(`Session ${sessionId} connected in initWhatsApp`);
             resolve(null);
           },
           onQRUpdated(qr) {
+            this.logger.info(`QR Code updated for session ${sessionId}`);
             resolve(qr);
           },
         });
@@ -191,6 +209,30 @@ class WhatsAppManager {
       if (qr) {
         clientData.qrData = await qrcode.toDataURL(qr);
         this.logger.info(`QR Code generated for ${numberId || sessionId}`);
+      } else {
+        // If no QR code, session might be already connected
+        this.logger.info(
+          `No QR code generated, session ${sessionId} might be connected`
+        );
+        clientData.isConnected = true;
+        clientData.connectedAt = new Date();
+
+        // Update numberToSessionMap
+        if (numberId) {
+          this.numberToSessionMap.set(numberId, sessionId);
+        }
+
+        // Save session to database
+        await this.db.saveSession(sessionId, {
+          numberId,
+          isConnected: true,
+          createdAt: new Date(),
+          lastActivity: new Date(),
+          metadata: { isRecovery: isRecovery },
+          connectedAt: new Date(),
+          owner: owner || null,
+          ownerCompany: ownerCompany || null,
+        });
       }
 
       return clientData;
@@ -336,17 +378,37 @@ class WhatsAppManager {
   async recoverSessions() {
     try {
       const sessions = await this.db.getAllSessions();
+      this.logger.info(`Found ${sessions.length} sessions to recover`);
 
       for (const session of sessions) {
         try {
           this.logger.info(
             `Attempting to recover session: ${session.sessionId}`
           );
+
+          // Check if session already exists in memory
+          if (this.clients.has(session.sessionId)) {
+            this.logger.info(
+              `Session ${session.sessionId} already in memory, skipping`
+            );
+            continue;
+          }
+
           await this.initWhatsApp(
             session.sessionId,
             session.numberId,
             true,
-            session.owner || null
+            session.owner || null,
+            session.ownerCompany || null
+          );
+
+          // Update numberToSessionMap
+          if (session.numberId) {
+            this.numberToSessionMap.set(session.numberId, session.sessionId);
+          }
+
+          this.logger.info(
+            `✅ Session ${session.sessionId} recovered successfully`
           );
         } catch (error) {
           this.logger.error(
@@ -437,14 +499,19 @@ class WhatsAppManager {
       return null;
     }
 
+    // Check if session is actually connected in wa-multi-session
+    const whatsapp = require("wa-multi-session");
+    const sessionExists = whatsapp.getSession(sessionId);
+
     const status = {
-      isConnected: clientData.isConnected,
+      isConnected: clientData.isConnected && !!sessionExists,
       qrReady: !!clientData.qrData,
       numberId: clientData.numberId,
       lastActivity: clientData.lastActivity,
       reconnectAttempts: clientData.reconnectAttempts,
       maxReconnectAttempts: clientData.maxReconnectAttempts,
       connectedAt: clientData.connectedAt || null,
+      sessionExists: !!sessionExists,
     };
 
     this.logger.debug(`Session status for ${sessionId}:`, status);
