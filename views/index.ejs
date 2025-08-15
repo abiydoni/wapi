@@ -103,6 +103,10 @@
                 class="bg-white hover:bg-gray-50 text-gray-600 font-semibold py-2.5 px-4 rounded-full transition-all transform hover:scale-[1.02] active:scale-95 border border-gray-800 shadow-sm hover:shadow-md cursor-pointer">
                 Disconnect
               </button>
+              <button type="button" onclick="forceConnect('${s.sessionId}')"
+                class="bg-white hover:bg-gray-50 text-gray-600 font-semibold py-2.5 px-4 rounded-full transition-all transform hover:scale-[1.02] active:scale-95 border border-gray-800 shadow-sm hover:shadow-md cursor-pointer">
+                Force Connect
+              </button>
             </td>
           `;
           tbody.appendChild(tr);
@@ -133,6 +137,31 @@
       const data = await res.json();
       showTWToast({ type: data.status === 'success' ? 'success' : 'error', message: data.status === 'success' ? 'Disconnect successful' : 'Disconnect failed: ' + data.message });
       loadSessions();
+    }
+
+    async function forceConnect(sessionId) {
+      const confirmed = await showCustomConfirm({
+        title: "Force Connect Session",
+        message: "Are you sure you want to force connect this session?",
+        okText: "Yes, Force Connect",
+        cancelText: "Cancel"
+      });
+      if (!confirmed) return;
+      
+      try {
+        const res = await fetch(`/sessions/${sessionId}/status`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ isConnected: true })
+        });
+        const data = await res.json();
+        showTWToast({ type: data.status === 'success' ? 'success' : 'error', message: data.message });
+        loadSessions();
+      } catch (error) {
+        showTWToast({ type: 'error', message: 'Failed to force connect session' });
+      }
     }
 
     function timeAgo(date) {

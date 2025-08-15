@@ -101,43 +101,6 @@ class WhatsAppManager {
       }
     });
 
-    // Add connection state change handler
-    whatsapp.onConnectionStateChanged(async (session, state) => {
-      this.logger.info(
-        `Connection state changed for session ${session}: ${state}`
-      );
-      const clientData = this.clients.get(session);
-      if (clientData) {
-        if (state === "connected") {
-          clientData.isConnected = true;
-          clientData.qrData = null;
-          clientData.connectedAt = new Date();
-          await this.updateSessionStatus(session, true);
-
-          // Update numberToSessionMap
-          if (clientData.numberId) {
-            this.numberToSessionMap.set(clientData.numberId, session);
-          }
-
-          this.logger.info(
-            `✅ Session ${session} connection state changed to connected`
-          );
-        } else if (state === "disconnected") {
-          clientData.isConnected = false;
-          await this.updateSessionStatus(session, false);
-
-          // Remove from numberToSessionMap
-          if (clientData.numberId) {
-            this.numberToSessionMap.delete(clientData.numberId);
-          }
-
-          this.logger.info(
-            `❌ Session ${session} connection state changed to disconnected`
-          );
-        }
-      }
-    });
-
     whatsapp.onConnecting(async (session) => {
       this.logger.info(`Session '${session}' connecting`);
       const clientData = this.clients.get(session);
