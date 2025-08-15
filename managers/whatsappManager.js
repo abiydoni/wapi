@@ -84,6 +84,23 @@ class WhatsAppManager {
       }
     });
 
+    // Add QR code update handler
+    whatsapp.onQRUpdated(async (session, qr) => {
+      this.logger.info(`QR Code updated for session ${session}`);
+      const clientData = this.clients.get(session);
+      if (clientData) {
+        try {
+          clientData.qrData = await qrcode.toDataURL(qr);
+          this.logger.info(`QR Code generated for session ${session}`);
+        } catch (error) {
+          this.logger.error(
+            `Failed to generate QR code for session ${session}:`,
+            error
+          );
+        }
+      }
+    });
+
     whatsapp.onConnecting(async (session) => {
       this.logger.info(`Session '${session}' connecting`);
       const clientData = this.clients.get(session);
@@ -239,46 +256,70 @@ class WhatsAppManager {
 
       // Start session with wa-multi-session
       const self = this; // Store reference to this
+      let qrResolved = false;
+
       const qr = await new Promise(async (resolve) => {
         await whatsapp.startSession(sessionId, {
           onConnected() {
             self.logger.info(`Session ${sessionId} connected in initWhatsApp`);
-            resolve(null);
+            if (!qrResolved) {
+              qrResolved = true;
+              resolve(null);
+            }
           },
           onQRUpdated(qr) {
             self.logger.info(`QR Code updated for session ${sessionId}`);
-            resolve(qr);
+            if (!qrResolved) {
+              qrResolved = true;
+              resolve(qr);
+            }
           },
         });
+
+        // Timeout after 30 seconds if no QR or connection
+        setTimeout(() => {
+          if (!qrResolved) {
+            qrResolved = true;
+            self.logger.warn(
+              `Session ${sessionId} timeout - no QR or connection`
+            );
+            resolve(null);
+          }
+        }, 30000);
       });
 
       if (qr) {
         clientData.qrData = await qrcode.toDataURL(qr);
         this.logger.info(`QR Code generated for ${numberId || sessionId}`);
       } else {
-        // If no QR code, session might be already connected
-        this.logger.info(
-          `No QR code generated, session ${sessionId} might be connected`
-        );
-        clientData.isConnected = true;
-        clientData.connectedAt = new Date();
+        // Check if session is actually connected
+        const sessionExists = whatsapp.getSession(sessionId);
+        if (sessionExists) {
+          this.logger.info(`Session ${sessionId} is connected`);
+          clientData.isConnected = true;
+          clientData.connectedAt = new Date();
 
-        // Update numberToSessionMap
-        if (numberId) {
-          this.numberToSessionMap.set(numberId, sessionId);
+          // Update numberToSessionMap
+          if (numberId) {
+            this.numberToSessionMap.set(numberId, sessionId);
+          }
+
+          // Save session to database
+          await this.db.saveSession(sessionId, {
+            numberId,
+            isConnected: true,
+            createdAt: new Date(),
+            lastActivity: new Date(),
+            metadata: { isRecovery: isRecovery },
+            connectedAt: new Date(),
+            owner: owner || null,
+            ownerCompany: ownerCompany || null,
+          });
+        } else {
+          this.logger.warn(
+            `Session ${sessionId} not connected and no QR generated`
+          );
         }
-
-        // Save session to database
-        await this.db.saveSession(sessionId, {
-          numberId,
-          isConnected: true,
-          createdAt: new Date(),
-          lastActivity: new Date(),
-          metadata: { isRecovery: isRecovery },
-          connectedAt: new Date(),
-          owner: owner || null,
-          ownerCompany: ownerCompany || null,
-        });
       }
 
       return clientData;

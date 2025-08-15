@@ -17,13 +17,37 @@ module.exports = (whatsappManager) => {
   router.get("/qr", async (req, res) => {
     try {
       const { sessionId, numberId } = req.query;
+      console.log("🔍 QR Route - sessionId:", sessionId, "numberId:", numberId);
+
       if (!sessionId && !numberId) {
         return res.status(400).send("Session ID or Number ID is required");
       }
 
       if (sessionId) {
+        console.log("🔍 Looking for session:", sessionId);
         const clientData = whatsappManager.getSessionById(sessionId);
-        if (!clientData) return res.status(404).send("Session not found");
+        console.log("🔍 Client data found:", !!clientData);
+
+        if (!clientData) {
+          console.log(
+            "🔍 Session not found, checking if numberId exists:",
+            numberId
+          );
+          // If session not found but numberId exists, try to find by numberId
+          if (numberId && whatsappManager.numberToSessionMap.has(numberId)) {
+            const existingSessionId =
+              whatsappManager.numberToSessionMap.get(numberId);
+            console.log(
+              "🔍 Found existing session for numberId:",
+              existingSessionId
+            );
+            return res.redirect(
+              `/qr?sessionId=${existingSessionId}&numberId=${numberId}`
+            );
+          }
+          return res.status(404).send("Session not found");
+        }
+
         if (clientData.isConnected) {
           const baseUrl = "https://" + req.get("host");
           return res.render("connected", {
@@ -35,6 +59,7 @@ module.exports = (whatsappManager) => {
             user: { username: "admin", role: "admin", company: "WhatsApp API" },
           });
         }
+
         if (!clientData.qrData) {
           return res.send(`
             <!DOCTYPE html>
@@ -66,6 +91,7 @@ module.exports = (whatsappManager) => {
             </html>
           `);
         }
+
         return res.render("qr", {
           qrData: clientData.qrData,
           sessionId,
@@ -76,17 +102,31 @@ module.exports = (whatsappManager) => {
       }
 
       if (numberId) {
+        console.log("🔍 Processing numberId:", numberId);
         if (whatsappManager.numberToSessionMap.has(numberId)) {
           const existingSessionId =
             whatsappManager.numberToSessionMap.get(numberId);
           const existingSession =
             whatsappManager.clients.get(existingSessionId);
-          if (existingSession)
-            return res.redirect(`/qr?sessionId=${existingSessionId}`);
+          console.log("🔍 Found existing session:", existingSessionId);
+          if (existingSession) {
+            return res.redirect(
+              `/qr?sessionId=${existingSessionId}&numberId=${numberId}`
+            );
+          }
         }
+        console.log("🔍 Creating new session for numberId:", numberId);
         const newSessionId = whatsappManager.generateSessionId();
-        await whatsappManager.initWhatsApp(newSessionId, numberId);
-        return res.redirect(`/qr?sessionId=${newSessionId}`);
+        await whatsappManager.initWhatsApp(
+          newSessionId,
+          numberId,
+          false,
+          "admin",
+          "WhatsApp API"
+        );
+        return res.redirect(
+          `/qr?sessionId=${newSessionId}&numberId=${numberId}`
+        );
       }
     } catch (error) {
       whatsappManager.logger.error("QR endpoint error:", error);
