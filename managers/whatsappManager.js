@@ -47,7 +47,7 @@ class WhatsAppManager {
         }
 
         this.logger.info(`✅ Session ${session} fully connected and saved`);
-        
+
         // Send real-time update to connected clients
         this.sendStatusUpdateToClients(session);
       } else {
@@ -80,7 +80,7 @@ class WhatsAppManager {
 
             await this.updateSessionStatus(session, true);
             this.logger.info(`✅ Session ${session} recovered and connected`);
-            
+
             // Send real-time update to connected clients
             this.sendStatusUpdateToClients(session);
           }
@@ -90,17 +90,22 @@ class WhatsAppManager {
       }
     });
 
-    // Add QR code update handler
+    // Add QR code update handler - only update when necessary
     whatsapp.onQRUpdated(async (session, qr) => {
-      this.logger.info(`QR Code updated for session ${session}`);
       const clientData = this.clients.get(session);
-      if (clientData) {
+      if (clientData && !clientData.isConnected) {
         try {
-          clientData.qrData = await qrcode.toDataURL(qr);
-          this.logger.info(`QR Code generated for session ${session}`);
+          // Only update QR if session is not connected
+          if (!clientData.qrData) {
+            clientData.qrData = await qrcode.toDataURL(qr);
+            this.logger.info(`QR Code generated for session ${session}`);
 
-          // Update database with QR status
-          await this.updateSessionStatus(session, false);
+            // Update database with QR status
+            await this.updateSessionStatus(session, false);
+
+            // Send real-time update to connected clients
+            this.sendStatusUpdateToClients(session);
+          }
         } catch (error) {
           this.logger.error(
             `Failed to generate QR code for session ${session}:`,
@@ -130,7 +135,7 @@ class WhatsAppManager {
         if (clientData.numberId) {
           this.numberToSessionMap.delete(clientData.numberId);
         }
-        
+
         // Send real-time update to connected clients
         this.sendStatusUpdateToClients(session);
       }
@@ -738,7 +743,7 @@ class WhatsAppManager {
       this.logger.info(
         `Force updated session ${sessionId} status to: ${isConnected}`
       );
-      
+
       // Send real-time update to connected clients
       this.sendStatusUpdateToClients(sessionId);
     }
@@ -754,7 +759,10 @@ class WhatsAppManager {
           try {
             client.res.write(`data: ${JSON.stringify(status)}\n\n`);
           } catch (error) {
-            this.logger.error(`Failed to send update to client ${client.id}:`, error);
+            this.logger.error(
+              `Failed to send update to client ${client.id}:`,
+              error
+            );
           }
         }
       });

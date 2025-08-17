@@ -118,11 +118,11 @@
     }
     loadSessions();
     
-    // Auto-refresh sessions every 5 seconds for better real-time updates
-    setInterval(loadSessions, 5000);
+    // Auto-refresh sessions every 10 seconds (less aggressive)
+    setInterval(loadSessions, 10000);
     
-    // Setup SSE for real-time status updates
-    setupSSE();
+    // Setup SSE after sessions are loaded
+    setTimeout(setupSSE, 1000);
 
     async function disconnectSession(sessionId) {
       const confirmed = await showCustomConfirm({
@@ -264,10 +264,12 @@
     // Setup SSE for real-time status updates
     function setupSSE() {
       // Get all session IDs from the current table
-      const sessionRows = document.querySelectorAll('#sessionTable tr');
+      const sessionRows = document.querySelectorAll('#sessionTable tr[data-session-id]');
+      console.log(`Setting up SSE for ${sessionRows.length} sessions`);
+      
       sessionRows.forEach(row => {
         const sessionId = row.getAttribute('data-session-id');
-        if (sessionId) {
+        if (sessionId && sessionId !== 'undefined') {
           connectSSE(sessionId);
         }
       });
@@ -275,11 +277,27 @@
 
     // Connect to SSE for a specific session
     function connectSSE(sessionId) {
+      console.log(`Connecting SSE for session: ${sessionId}`);
+      
+      // Close existing connection if any
+      if (window.sseConnections && window.sseConnections[sessionId]) {
+        window.sseConnections[sessionId].close();
+      }
+      
+      // Initialize connections object if not exists
+      if (!window.sseConnections) {
+        window.sseConnections = {};
+      }
+      
       const eventSource = new EventSource(`/status?sessionId=${sessionId}`);
+      window.sseConnections[sessionId] = eventSource;
       
       eventSource.onmessage = function(event) {
         try {
+          if (event.data === ': heartbeat') return; // Skip heartbeat
+          
           const status = JSON.parse(event.data);
+          console.log(`SSE update for ${sessionId}:`, status);
           updateSessionStatus(sessionId, status);
         } catch (error) {
           console.error('Error parsing SSE data:', error);
@@ -287,8 +305,13 @@
       };
       
       eventSource.onerror = function(error) {
-        console.error('SSE connection error:', error);
+        console.error(`SSE connection error for ${sessionId}:`, error);
         eventSource.close();
+        delete window.sseConnections[sessionId];
+      };
+      
+      eventSource.onopen = function() {
+        console.log(`SSE connection opened for ${sessionId}`);
       };
     }
 
@@ -299,19 +322,41 @@
         const statusCell = row.querySelector('.status-cell');
         if (statusCell) {
           const isConnected = status.isConnected;
+          
+          // Only update if status actually changed
+          const currentStatus = statusCell.querySelector('.status-text');
+          if (currentStatus) {
+            const currentText = currentStatus.textContent;
+            const newText = isConnected ? 'Connected' : 'Disconnected';
+            if (currentText === newText) {
+              console.log(`Status unchanged for ${sessionId}: ${newText}`);
+              return; // Skip update if status is the same
+            }
+          }
+          
           const statusHtml = `
             <div class="inline-flex items-center ${isConnected ? 'bg-green-300/20' : 'bg-red-300/20'} px-2 py-2 rounded-full">
               <span class="inline-block w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-400'}"></span>
               <div class="flex flex-col px-4">
-                ${isConnected ? '<span class="text-green-600 font-semibold">Connected</span>' : '<span class="text-red-500">Disconnected</span>'}
+                <span class="status-text ${isConnected ? 'text-green-600' : 'text-red-500'} font-semibold">${isConnected ? 'Connected' : 'Disconnected'}</span>
                 <span class="text-xs text-gray-500">${status.connectedAt ? timeAgo(new Date(status.connectedAt)) : 'Waiting for scan...'}</span>
               </div>
             </div>
           `;
           statusCell.innerHTML = statusHtml;
+          console.log(`Status updated for ${sessionId}: ${isConnected ? 'Connected' : 'Disconnected'}`);
         }
       }
     }
+
+    // Cleanup SSE connections on page unload
+    window.addEventListener('beforeunload', function() {
+      if (window.sseConnections) {
+        Object.values(window.sseConnections).forEach(connection => {
+          connection.close();
+        });
+      }
+    });
 
     // Handle Add Number form submit
     document.querySelector('form[action="/sessions"]').addEventListener('submit', async function(e) {
@@ -362,4 +407,5 @@
     });
   </script>
 </body>
+</html>
 </html>
