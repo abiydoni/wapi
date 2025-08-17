@@ -95,10 +95,11 @@ class WhatsAppManager {
       const clientData = this.clients.get(session);
       if (clientData && !clientData.isConnected) {
         try {
-          // Only update QR if session is not connected
-          if (!clientData.qrData) {
-            clientData.qrData = await qrcode.toDataURL(qr);
-            this.logger.info(`QR Code generated for session ${session}`);
+          // Only update QR if session is not connected and QR is different
+          const newQRData = await qrcode.toDataURL(qr);
+          if (clientData.qrData !== newQRData) {
+            clientData.qrData = newQRData;
+            this.logger.info(`QR Code updated for session ${session}`);
 
             // Update database with QR status
             await this.updateSessionStatus(session, false);
