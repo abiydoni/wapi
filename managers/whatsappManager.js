@@ -787,29 +787,60 @@ class WhatsAppManager {
   // ----------------------
   // Message Sending Methods
   // ----------------------
+
+  // Format phone number to standard format
+  formatPhoneNumber(phoneNumber) {
+    if (!phoneNumber) return null;
+
+    // Remove all non-digit characters
+    let cleaned = phoneNumber.replace(/\D/g, "");
+
+    // Remove leading zeros and add 62 prefix for Indonesia
+    if (cleaned.startsWith("0")) {
+      cleaned = "62" + cleaned.substring(1);
+    }
+
+    // Ensure it starts with 62
+    if (!cleaned.startsWith("62")) {
+      cleaned = "62" + cleaned;
+    }
+
+    return cleaned;
+  }
+
   async sendMessage(sessionId, to, text, isGroup = false) {
-    const clientData = this.clients.get(sessionId);
-    if (!clientData) {
-      throw new Error("Session not found");
+    try {
+      const clientData = this.clients.get(sessionId);
+      if (!clientData) {
+        throw new Error("Session not found");
+      }
+
+      if (!clientData.isConnected) {
+        throw new Error("WhatsApp not connected");
+      }
+
+      const whatsapp = require("wa-multi-session");
+
+      // Use the correct method for wa-multi-session
+      const response = await whatsapp.sendTextMessage(sessionId, to, text);
+
+      this.logger.info(`Message sent successfully to ${to}: ${text}`);
+      return response;
+    } catch (error) {
+      this.logger.error(`Failed to send message to ${to}:`, error);
+      throw error;
     }
-
-    if (!clientData.isConnected) {
-      throw new Error("WhatsApp not connected");
-    }
-
-    const response = await whatsapp.sendTextMessage({
-      sessionId: sessionId,
-      to: to,
-      text: text,
-      isGroup: isGroup,
-    });
-
-    return response;
   }
 
   async sendGroupMessage(sessionId, groupId, message) {
-    const jid = groupId.endsWith("@g.us") ? groupId : `${groupId}@g.us`;
-    return await this.sendMessage(sessionId, jid, message, true);
+    try {
+      const jid = groupId.endsWith("@g.us") ? groupId : `${groupId}@g.us`;
+      this.logger.info(`Sending group message to ${jid}: ${message}`);
+      return await this.sendMessage(sessionId, jid, message, true);
+    } catch (error) {
+      this.logger.error(`Failed to send group message to ${groupId}:`, error);
+      throw error;
+    }
   }
 }
 
