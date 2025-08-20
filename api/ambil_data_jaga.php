@@ -41,20 +41,21 @@ $stmt = $pdo->prepare("SELECT name FROM users WHERE shift = :shift");
 $stmt->execute(['shift' => $hariEng]);
 $users = $stmt->fetchAll();
 
-$text = "⏰ *Jadwal Jaga Hari ini :* $hariInd, $tanggal $bulanInd $tahun\n\n";
+$pesan = "⏰ *Jadwal Jaga Hari ini :* $hariInd, $tanggal $bulanInd $tahun\n\n";
 
 if ($users) {
     $no = 1;
     foreach ($users as $user) {
-        $text .= $no++ . "️⃣ " . $user['name'] . "\n";
+        $pesan .= $no++ . "️⃣ " . $user['name'] . "\n";
     }
 } else {
-    $text .= "❌ Tidak ada petugas jaga hari ini.";
+    $pesan .= "❌ Tidak ada petugas jaga hari ini.";
 }
 
 // Tambahkan penutup
-$text .= "\n🌟 Selamat melaksanakan tugas 🏡RT.07\n";
-$text .= "🕸️ *Link scan* : https://rt07.appsbee.my.id\n\n";
-$text .= "_- Pesan Otomatis dari System -_";
-echo $text;
-?>
+$pesan .= "\n🌟 Selamat melaksanakan tugas 🏡RT.07\n";
+$pesan .= "🕸️ *Link scan* : https://rt07.appsbee.my.id\n\n";
+$pesan .= "_- Pesan Otomatis dari System -_";
+
+header('Content-Type: text/plain');
+echo $pesan;

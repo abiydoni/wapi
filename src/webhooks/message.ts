@@ -1,0 +1,68 @@
+import { MessageReceived } from "wa-multi-session";
+import { CreateWebhookProps, webhookClient } from ".";
+import {
+  handleWebhookAudioMessage,
+  handleWebhookDocumentMessage,
+  handleWebhookImageMessage,
+  handleWebhookVideoMessage,
+} from "./media";
+
+type WebhookMessageBody = {
+  session: string;
+  from: string | null;
+  message: string | null;
+
+  media: {
+    image: string | null;
+    video: string | null;
+    document: string | null;
+    audio: string | null;
+  };
+};
+
+export const createWebhookMessage =
+  (props: CreateWebhookProps) => async (message: MessageReceived) => {
+    if (message.key.fromMe || message.key.remoteJid?.includes("broadcast"))
+      return;
+
+    const endpoint = `${props.baseUrl}/message`;
+
+    // Untuk stabilitas awal: nonaktifkan ekstraksi media agar webhook ringan
+    const image = null;
+    const video = null;
+    const document = null;
+    const audio = null;
+
+    const body = {
+      session: message.sessionId,
+      from: message.key.remoteJid ?? null,
+      message:
+        message.message?.conversation ||
+        message.message?.extendedTextMessage?.text ||
+        message.message?.imageMessage?.caption ||
+        message.message?.videoMessage?.caption ||
+        message.message?.documentMessage?.caption ||
+        message.message?.contactMessage?.displayName ||
+        message.message?.locationMessage?.comment ||
+        message.message?.liveLocationMessage?.caption ||
+        null,
+
+      /**
+       * media message
+       */
+      media: {
+        image,
+        video,
+        document,
+        audio,
+      },
+    } satisfies WebhookMessageBody;
+
+    // Debug log + fire-and-forget agar tidak menghambat event loop
+    console.log(
+      `WEBHOOK -> ${endpoint} | from=${body.from} | hasMsg=${!!body.message}`
+    );
+    webhookClient.post(endpoint, body).catch((err) => {
+      console.error("WEBHOOK ERROR:", err);
+    });
+  };
